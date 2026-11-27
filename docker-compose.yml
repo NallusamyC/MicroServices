@@ -1,0 +1,93 @@
+services:
+  naming-server:
+    image: sherine2024/naming-server:0.0.1-SNAPSHOT
+    container_name: naming-server
+    build:
+      context: ./naming-server
+      dockerfile: Dockerfile
+    ports:
+      - "8761:8761"
+    networks:
+      - app-network
+  gateway-service:
+    image: sherine2024/gateway-service:0.0.1-SNAPSHOT
+    container_name: gateway-service
+    environment:
+      - EUREKA.CLIENT.SERVICEURL.DEFAULTZONE=http://naming-server:8761/eureka/ 
+    ports:
+      - "9095:9095"
+    networks:
+      - app-network
+    depends_on:
+      - naming-server
+    links:
+      - naming-server
+  product-service:
+    image: sherine2024/product-service:0.0.1-SNAPSHOT
+    restart: on-failure
+    container_name: product-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - EUREKA.CLIENT.SERVICEURL.DEFAULTZONE=http://naming-server:8761/eureka/ 
+    ports:
+      - "8092:8092"
+    networks:
+      - app-network
+    depends_on:
+      - naming-server
+      - mysqldb
+    links:
+      - naming-server
+      - mysqldb
+  coupon-service:
+      image: sherine2024/coupon-service:0.0.1-SNAPSHOT
+      restart: on-failure
+      container_name: coupon-service
+      environment:
+        - SPRING_PROFILES_ACTIVE=docker
+        - EUREKA.CLIENT.SERVICEURL.DEFAULTZONE=http://naming-server:8761/eureka/ 
+      ports:
+        - "8081:8081"
+      networks:
+        - app-network
+      depends_on:
+        - naming-server
+        - mysqldb
+      links:
+        - naming-server
+        - mysqldb
+  mysqldb:
+      image: mysql:8.0.41
+      restart: on-failure
+      container_name: mysqldb
+      ports:
+        - "33000:3306"
+      networks:
+        - app-network
+      environment:
+        - MYSQL_ROOT_PASSWORD=root
+        - MYSQL_DATABASE=bootdb
+  prometheus:
+    image: prom/prometheus:v2.46.0
+    container_name: prometheus
+    command:
+      - --enable-feature=exemplar-storage
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+    - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+    - "9090:9090"
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: grafana
+    volumes:
+      - ./docker/grafana:/etc/grafana/provisioning/datasources:ro
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    ports:
+      - "3000:3000"
+networks:
+  app-network:
+      driver: bridge
